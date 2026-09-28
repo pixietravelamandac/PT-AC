@@ -1,6 +1,13 @@
 # Disney World Match
 
-A quiz for Pixie Travel Co. clients. Guests answer 15 questions about their group, budget and style. The quiz then recommends three Walt Disney World resorts and a short list of restaurants, and gives the guest a summary to send to their advisor.
+A quiz for Pixie Travel Co. clients. Guests answer 16 questions about their group, budget and style. The quiz then recommends three Walt Disney World resorts and restaurants grouped into character meals, table service and quick service, each with its dining plan credits and a menu link. Guests can also browse every restaurant and copy a summary to send to their advisor.
+
+## What's included
+
+- **Resorts (32):** every Disney-run resort, including all Disney Vacation Club villas, Fort Wilderness campsites and cabins, plus the Swan, Dolphin and Swan Reserve. Not included: Shades of Green (military only), the Disney Springs area hotels, and Disney Lakeshore Lodge (opening 2027).
+- **Restaurants (140):** every table-service and character restaurant, and the main quick-service locations, at the four parks, the resort hotels and Disney Springs. Snack stands, carts, lounges and bars aren't included.
+- **Dining plan credits:** based on the 2026 plans. Disney Springs and other restaurants that Disney doesn't run show "ask your advisor" until you confirm them.
+- **Menu links:** most restaurants link to their official menu on disneyworld.disney.go.com. The rest link to a search of Disney's site. To add an exact link, set `menu` in `data.js`.
 
 It is a plain website (HTML, CSS and JavaScript). There's no build step, server or database.
 

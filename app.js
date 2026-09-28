@@ -17,7 +17,7 @@
   };
   var INTERESTS = { princess: "princess fans", classic: "Mickey fans", pixar: "Pixar fans", starwars: "Star Wars and space fans", animals: "animal lovers" };
   var CELEBRATE = { birthday: "Fun for a birthday", anniversary: "Romantic for an anniversary", first: "A classic first-visit meal" };
-  var KINDS = { character: "Character meal", table: "Sit-down", signature: "Signature", quick: "Quick service" };
+  var KINDS = { character: "Character meal", table: "Table service", signature: "Signature dining", quick: "Quick service" };
 
   var QUESTIONS = [
     { id: "who", section: "Your stay", type: "multi",
@@ -102,8 +102,9 @@
       prompt: "Are you planning to use a Disney dining plan?",
       help: "Dining plans are added to a Walt Disney World resort package. Your advisor will confirm current pricing and details.",
       options: [
-        { value: "full", label: "Disney Dining Plan", hint: "One table-service meal, one quick-service meal and two snacks per person, per night" },
-        { value: "quick", label: "Quick-Service Dining Plan", hint: "Two quick-service meals and two snacks per person, per night" },
+        { value: "full", label: "Disney Dining Plan", hint: "One table-service meal, one quick-service meal and one snack per person, per night" },
+        { value: "quick", label: "Quick-Service Dining Plan", hint: "Two quick-service meals and one snack per person, per night" },
+        { value: "deluxe", label: "Deluxe Dining Plan", hint: "Two table-service meals and one quick-service meal per person, per night. For 2027 trips" },
         { value: "none", label: "No, we'll pay as we go" },
         { value: "unsure", label: "Not sure yet", hint: "Your advisor can help you compare" }
       ] },
@@ -150,11 +151,33 @@
     return Array.isArray(t) ? t : (t ? [t] : []);
   }
 
-  // Signature restaurants and Cinderella's Royal Table take two table-service credits.
+  // Dining plan credits: signature meals take 2, other meals 1.
+  // 0 means the plan isn't accepted; null means participation needs checking.
   function planCredits(d) {
-    if (d.plan === false) return 0;
-    return d.credits || (d.kind === "signature" ? 2 : 1);
+    if (d.credits !== undefined) return d.credits;
+    return d.kind === "signature" ? 2 : 1;
   }
+
+  function creditLabel(d) {
+    var c = planCredits(d);
+    if (c === null) return "Dining plan: ask your advisor";
+    if (c === 0) return "Not on the dining plan";
+    if (d.kind === "quick") return "1 quick-service credit";
+    return c + " table-service credit" + (c > 1 ? "s" : "") + (d.creditsNote ? " (" + d.creditsNote + ")" : "");
+  }
+
+  var MENU_BASE = "https://disneyworld.disney.go.com/dining/";
+  function menuLink(d) {
+    if (d.menuUrl) return { href: d.menuUrl, label: "View menu" };
+    if (d.menu) return { href: MENU_BASE + d.menu + "/menus/", label: "View menu" };
+    return {
+      href: "https://www.google.com/search?q=" + encodeURIComponent('site:disneyworld.disney.go.com "' + d.name + '" menu'),
+      label: "Find menu"
+    };
+  }
+
+  // Ratings default to 1 (neutral) when the data leaves them out.
+  function rating(v) { return v == null ? 1 : v; }
 
   function audience(a) {
     var who = a.who || [];
@@ -162,13 +185,18 @@
     return { who: who, hasKids: hasKids, youngKids: who.indexOf("young-kids") >= 0, adultsOnly: !hasKids };
   }
 
+  function usesPlan(a) { return a.diningPlan === "full" || a.diningPlan === "quick" || a.diningPlan === "deluxe"; }
+
   function scoreResort(r, a) {
     var s = 0, why = [];
     var need = Number(a.size || 4);
     var fitsStandard = r.sleeps >= need;
     if (!fitsStandard && !(r.suiteSleeps >= need)) return null;
     if (!fitsStandard) { s -= 4; why.push(r.suiteLabel + " sleep up to " + r.suiteSleeps); }
-    else if (need >= 5) why.push("Standard rooms sleep " + r.sleeps);
+    else if (need >= 5 && !r.camping) why.push((r.roomLabel || (r.tier === "villa" ? "Studios" : "Standard rooms")) + " sleep " + r.sleeps);
+
+    if (r.camping) { s -= 40; why.push("Bring your own tent or RV"); }
+    if (r.partner && usesPlan(a)) { s -= 15; why.push("Dining plans aren't available here"); }
 
     if (a.budget && a.budget !== "flex") {
       var diff = TIER_RANK[r.tier] - TIER_RANK[a.budget];
@@ -208,12 +236,13 @@
     return { item: r, score: s, why: why.slice(0, 4) };
   }
 
-  function scoreRestaurant(d, a, topResortId) {
+  function scoreRestaurant(d, a, topResort) {
     var s = 0, why = [];
     var aud = audience(a);
     var isChar = d.kind === "character";
+    var picky = rating(d.picky), adv = rating(d.adv), kids = rating(d.kids), adults = rating(d.adults);
 
-    if (d.minAge && aud.hasKids && aud.youngKids) return null;
+    if (d.minAge && aud.youngKids) return null;
     if (a.characters === "none" && isChar) return null;
     if (a.characters === "must" && isChar) s += 30;
     if (a.characters === "some" && isChar) s += 12;
@@ -228,15 +257,16 @@
       s += matched ? 14 : -6;
     }
 
-    if (a.diningPlan === "full") {
-      var credits = planCredits(d);
+    var credits = planCredits(d);
+    if (a.diningPlan === "full" || a.diningPlan === "deluxe") {
       if (credits === 0) { s -= 20; why.push("Not on the dining plan"); }
+      else if (credits === null) s -= 4;
       else if (d.kind !== "quick" && credits === 1) s += 8;
-      else if (credits === 2) { s -= 4; why.push("Uses 2 table-service credits"); }
+      else if (credits === 2) s += a.diningPlan === "deluxe" ? 4 : -4;
     }
     if (a.diningPlan === "quick") {
-      if (d.kind === "quick") { s += 20; why.push("Covered by the Quick-Service plan"); }
-      else s -= 8;
+      if (d.kind === "quick" && credits === 1) { s += 20; why.push("Covered by the Quick-Service plan"); }
+      else if (d.kind !== "quick") s -= 8;
     }
 
     if (d.kind !== "quick") {
@@ -244,9 +274,9 @@
       s += over > 0 ? -14 * over : 6;
     }
 
-    if (a.eaters === "picky") { s += (d.picky - 1) * 10; if (d.picky === 2) why.push("Easy for picky eaters"); }
-    if (a.eaters === "adventurous") { s += (d.adv - 1) * 10; if (d.adv === 2) why.push("Adventurous flavors"); }
-    if (a.eaters === "mixed" && d.picky + d.adv >= 2) s += 4;
+    if (a.eaters === "picky") { s += (picky - 1) * 10; if (picky === 2) why.push("Easy for picky eaters"); }
+    if (a.eaters === "adventurous") { s += (adv - 1) * 10; if (adv === 2) why.push("Adventurous flavors"); }
+    if (a.eaters === "mixed" && picky + adv >= 2) s += 4;
 
     (a.interests || []).forEach(function (t) {
       if ((d.themes || []).indexOf(t) >= 0) { s += 12; why.push("Great for " + INTERESTS[t]); }
@@ -254,11 +284,14 @@
 
     if (CELEBRATE[a.celebrate] && (d.celebrate || []).indexOf(a.celebrate) >= 0) { s += 12; why.push(CELEBRATE[a.celebrate]); }
 
-    if (aud.adultsOnly) { s += (d.adults - 1) * 8; if (d.adults === 2) why.push("Grown-up atmosphere"); }
-    else { s += (d.kids - 1) * 6; if (d.kids === 0) s -= 20; }
+    if (aud.adultsOnly) { s += (adults - 1) * 8; if (adults === 2) why.push("Grown-up atmosphere"); }
+    else { s += (kids - 1) * 6; if (kids === 0) s -= 20; }
 
-    if (d.resort && d.resort === topResortId) { s += 10; why.unshift("At your top resort match"); }
+    var atTop = topResort && d.resort && (d.resort === topResort.id || d.resort === topResort.host);
+    if (atTop) { s += 10; why.unshift("At your top resort match"); }
     else if ((a.parks || []).indexOf(d.park) >= 0) { s += 6; why.push("In " + PARKS[d.park]); }
+
+    if (d.status) s -= 3;
 
     return { item: d, score: s, why: why.slice(0, 3) };
   }
@@ -267,21 +300,26 @@
     return list.map(fn).filter(Boolean).sort(function (x, y) { return y.score - x.score; });
   }
 
+  var DINING_GROUPS = [
+    { title: "Character meals", kinds: ["character"] },
+    { title: "Table service", kinds: ["table", "signature"] },
+    { title: "Quick service", kinds: ["quick"] }
+  ];
+
   function computeResults(a) {
     var resorts = rank(DATA.resorts, function (r) { return scoreResort(r, a); }).slice(0, 3);
-    var topId = resorts[0] && resorts[0].item.id;
-    var dining = rank(DATA.restaurants, function (d) { return scoreRestaurant(d, a, topId); });
-    var pick = function (kinds, n) {
-      return dining.filter(function (x) { return kinds.indexOf(x.item.kind) >= 0 && x.score > -10; }).slice(0, n);
-    };
+    var top = resorts[0] && resorts[0].item;
+    var dining = rank(DATA.restaurants, function (d) { return scoreRestaurant(d, a, top); });
     return {
       plan: a.diningPlan,
       resorts: resorts,
-      dining: [
-        { title: "Character meals", items: a.characters === "none" ? [] : pick(["character"], 3) },
-        { title: "Sit-down and signature", items: pick(["table", "signature"], 3) },
-        { title: "Quick service", items: pick(["quick"], 3) }
-      ].filter(function (g) { return g.items.length; })
+      dining: DINING_GROUPS.map(function (g) {
+        var skip = g.kinds[0] === "character" && a.characters === "none";
+        return {
+          title: g.title,
+          items: skip ? [] : dining.filter(function (x) { return g.kinds.indexOf(x.item.kind) >= 0 && x.score > -10; }).slice(0, 3)
+        };
+      }).filter(function (g) { return g.items.length; })
     };
   }
 
@@ -411,12 +449,30 @@
   }
 
   var PLAN_NOTES = {
-    full: "You're planning on the Disney Dining Plan, so we favored restaurants that take one table-service credit. Signature restaurants take two.",
+    full: "You're planning on the Disney Dining Plan, so we favored restaurants that take one table-service credit. Signature restaurants and some character meals take two, and a few don't accept the plan.",
+    deluxe: "You're planning on the Deluxe Dining Plan. With two table-service credits a night, signature restaurants are easier to fit in. A few don't accept the plan.",
     quick: "You're planning on the Quick-Service Dining Plan, so we favored quick-service spots. Sit-down meals would be paid separately.",
     unsure: "Not sure about a dining plan? Your advisor can compare the plan with paying as you go, based on the restaurants you like here."
   };
   function planNote(plan) {
     return PLAN_NOTES[plan] ? '<p class="plan-note">' + esc(PLAN_NOTES[plan]) + '</p>' : '';
+  }
+
+  function restaurantCard(d, why) {
+    var credits = planCredits(d);
+    var link = menuLink(d);
+    return '<li class="restaurant">' +
+      '<div class="r-head"><h4>' + esc(d.name) + '</h4><span class="price" aria-label="Price level ' + d.price + ' of 4">' + priceTag(d.price) + '</span></div>' +
+      '<p class="meta">' + esc(d.where) + ' &middot; ' + esc(KINDS[d.kind]) + (d.family ? ', family-style' : '') + '</p>' +
+      (d.status ? '<p class="status-note">' + esc(d.status) + '</p>' : '') +
+      (d.chars ? '<p class="chars">Characters: ' + esc(d.chars) + '</p>' : '') +
+      '<p class="blurb">' + esc(d.note) + '</p>' +
+      (why.length ? '<ul class="why small">' + why.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') + '</ul>' : '') +
+      '<div class="r-foot">' +
+        '<span class="credits' + (credits === 0 ? ' off' : '') + '">' + esc(creditLabel(d)) + '</span>' +
+        '<a class="menu-link" href="' + esc(link.href) + '" target="_blank" rel="noopener">' + link.label + '<span class="sr-only"> for ' + esc(d.name) + ' (opens in a new tab)</span></a>' +
+      '</div>' +
+    '</li>';
   }
 
   function priceTag(n) { return "$$$$".slice(0, n); }
@@ -448,21 +504,29 @@
         '<p class="empty">No resort fits every answer. Your advisor can look at connecting rooms or villas for larger groups.</p>') +
 
         '<h2 class="section-title">Dining ideas</h2>' +
+        planNote(res.plan) +
         res.dining.map(function (g) {
           return '<div class="dining-group"><h3 class="group-title">' + esc(g.title) + '</h3><ul class="dining">' +
-            g.items.map(function (x) {
-              var d = x.item;
-              return '<li class="restaurant">' +
-                '<div class="r-head"><h4>' + esc(d.name) + '</h4><span class="price" aria-label="Price level ' + d.price + ' of 4">' + priceTag(d.price) + '</span></div>' +
-                '<p class="meta">' + esc(d.where) + ' &middot; ' + esc(KINDS[d.kind]) + (d.family ? ', family-style' : '') + '</p>' +
-                (d.chars ? '<p class="chars">Characters: ' + esc(d.chars) + '</p>' : '') +
-                '<p class="blurb">' + esc(d.note) + '</p>' +
-                (x.why.length ? '<ul class="why small">' + x.why.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') + '</ul>' : '') +
-              '</li>';
-            }).join('') + '</ul></div>';
+            g.items.map(function (x) { return restaurantCard(x.item, x.why); }).join('') + '</ul></div>';
         }).join('') +
-        planNote(res.plan) +
-        '<p class="fineprint">Menus, prices and character lineups change often. Price levels: $ under $15, $$ $15 to $35, $$$ $35 to $60, $$$$ over $60 per adult.</p>' +
+        '<p class="fineprint">Menus, prices, character lineups and dining plan rules change often. Price levels per adult: $ under $15, $$ $15 to $35, $$$ $35 to $60, $$$$ over $60.</p>' +
+
+        '<section class="browse" aria-labelledby="browse-title">' +
+          '<h2 id="browse-title" class="section-title">Browse every restaurant</h2>' +
+          '<p class="help">All ' + DATA.restaurants.length + ' table-service, character and quick-service restaurants at the parks, resorts and Disney Springs. Snack stands and bars aren\'t listed.</p>' +
+          '<div class="filters">' +
+            '<label class="field" for="browse-kind"><span>Type</span><select id="browse-kind">' +
+              DINING_GROUPS.map(function (g, i) { return '<option value="' + i + '">' + esc(g.title) + '</option>'; }).join('') +
+            '</select></label>' +
+            '<label class="field" for="browse-area"><span>Where</span><select id="browse-area">' +
+              '<option value="">Everywhere</option>' +
+              ["mk", "epcot", "hs", "ak", "springs"].map(function (p) { return '<option value="' + p + '">' + esc(PARKS[p]) + '</option>'; }).join('') +
+              '<option value="resort">Resort hotels</option>' +
+            '</select></label>' +
+          '</div>' +
+          '<p class="count" id="browse-count" aria-live="polite"></p>' +
+          '<ul class="dining" id="browse-list"></ul>' +
+        '</section>' +
 
         '<section class="send" aria-labelledby="send-title">' +
           '<h2 id="send-title">Send these to your advisor</h2>' +
@@ -484,6 +548,21 @@
         '</section>' +
         '<p class="fineprint">Pixie Travel Co. is an independent travel agency and is not affiliated with Disney.</p>' +
       '</section>';
+
+    var kindSel = document.getElementById("browse-kind");
+    var areaSel = document.getElementById("browse-area");
+    function renderBrowse() {
+      var kinds = DINING_GROUPS[Number(kindSel.value)].kinds;
+      var area = areaSel.value;
+      var list = DATA.restaurants.filter(function (d) {
+        return kinds.indexOf(d.kind) >= 0 && (!area || d.park === area);
+      }).sort(function (x, y) { return x.where.localeCompare(y.where) || x.name.localeCompare(y.name); });
+      document.getElementById("browse-count").textContent = list.length + " restaurant" + (list.length === 1 ? "" : "s");
+      document.getElementById("browse-list").innerHTML = list.map(function (d) { return restaurantCard(d, []); }).join("");
+    }
+    kindSel.onchange = renderBrowse;
+    areaSel.onchange = renderBrowse;
+    renderBrowse();
 
     var summary = document.getElementById("summary");
     var form = document.getElementById("contact");
@@ -546,7 +625,9 @@
     lines.push("", "DINING IDEAS");
     res.dining.forEach(function (g) {
       lines.push(g.title + ":");
-      g.items.forEach(function (x) { lines.push("- " + x.item.name + ", " + x.item.where + " (" + priceTag(x.item.price) + ")"); });
+      g.items.forEach(function (x) {
+        lines.push("- " + x.item.name + ", " + x.item.where + " (" + priceTag(x.item.price) + ", " + creditLabel(x.item) + ")");
+      });
     });
     if (c.notes) lines.push("", "NOTES", c.notes);
     return lines.join("\n");
