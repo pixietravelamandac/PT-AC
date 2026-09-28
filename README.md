@@ -1,6 +1,6 @@
 # Disney World Match
 
-A quiz for Pixie Travel Co. clients. Guests answer 14 questions about their group, budget and style. The quiz then recommends three Walt Disney World resorts and a short list of restaurants, and gives the guest a summary to send to their advisor.
+A quiz for Pixie Travel Co. clients. Guests answer 15 questions about their group, budget and style. The quiz then recommends three Walt Disney World resorts and a short list of restaurants, and gives the guest a summary to send to their advisor.
 
 It is a plain website (HTML, CSS and JavaScript). There's no build step, server or database.
 
@@ -19,7 +19,7 @@ It is a plain website (HTML, CSS and JavaScript). There's no build step, server 
 2. Each answer adds or subtracts points for resorts with matching traits. For example, "Monorail" adds 15 points to monorail resorts, and each park the guest picks adds up to 20 points for resorts close to it.
 3. Rooms that can't fit the party are removed. Resorts above the guest's budget lose points but can still show up if everything else fits.
 4. The top three resorts are shown with the reasons they matched.
-5. Restaurants work the same way: character preference, meal style, price, picky vs. adventurous eaters, favorite stories, celebrations, and whether it's at the top resort or in a favorite park.
+5. Restaurants work the same way: character preference, meal style, dining plan, price, picky vs. adventurous eaters, favorite stories, celebrations, and whether it's at the top resort or in a favorite park.
 
 All the weights live in `scoreResort` and `scoreRestaurant` in `app.js`.
 

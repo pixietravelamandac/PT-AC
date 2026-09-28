@@ -215,6 +215,12 @@ p { margin: 0; }
 .r-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .price { color: var(--gold); font-weight: 700; letter-spacing: 0.05em; flex: none; }
 .chars { font-size: var(--step--1); font-weight: 700; color: var(--lagoon); }
+.plan-note {
+  background: var(--gold-soft);
+  border-radius: 10px;
+  padding: 12px 16px;
+  max-width: 70ch;
+}
 .fineprint { color: var(--muted); font-size: 0.8rem; max-width: 70ch; }
 .empty { color: var(--muted); }
 

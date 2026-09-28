@@ -54,15 +54,15 @@
         { value: "hs", label: "Hollywood Studios", hint: "Star Wars, Toy Story, thrill rides" },
         { value: "ak", label: "Animal Kingdom", hint: "Safaris, Pandora, Expedition Everest" }
       ] },
-    { id: "transport", section: "Your stay", type: "single",
+    { id: "transport", section: "Your stay", type: "multi",
       prompt: "How would you like to get to the parks?",
-      help: "Every resort has free buses. Some also have one of these.",
+      help: "Pick any you'd be happy with. Every resort has free buses to all four parks.",
       options: [
         { value: "monorail", label: "Monorail" },
         { value: "skyliner", label: "Skyliner gondola" },
         { value: "boat", label: "Boat" },
         { value: "walk", label: "Walk to a park" },
-        { value: "any", label: "Buses are fine" },
+        { value: "bus", label: "Bus", hint: "Free Disney buses from every resort" },
         { value: "car", label: "We'll have a car" }
       ] },
     { id: "vibe", section: "Your stay", type: "multi", max: 2,
@@ -97,6 +97,15 @@
         { value: "table", label: "Sit-down meals", hint: "Table service" },
         { value: "family", label: "Buffets and family-style", hint: "All you care to enjoy" },
         { value: "signature", label: "Special-occasion dining", hint: "Signature restaurants" }
+      ] },
+    { id: "diningPlan", section: "Your dining", type: "single",
+      prompt: "Are you planning to use a Disney dining plan?",
+      help: "Dining plans are added to a Walt Disney World resort package. Your advisor will confirm current pricing and details.",
+      options: [
+        { value: "full", label: "Disney Dining Plan", hint: "One table-service meal, one quick-service meal and two snacks per person, per night" },
+        { value: "quick", label: "Quick-Service Dining Plan", hint: "Two quick-service meals and two snacks per person, per night" },
+        { value: "none", label: "No, we'll pay as we go" },
+        { value: "unsure", label: "Not sure yet", hint: "Your advisor can help you compare" }
       ] },
     { id: "diningBudget", section: "Your dining", type: "single",
       prompt: "What would you spend per adult on a sit-down meal?", help: "Before tax and tip.",
@@ -135,6 +144,18 @@
 
   var TIER_RANK = { value: 0, moderate: 1, deluxe: 2, villa: 2 };
 
+  // Older saved answers stored transport as a single value.
+  function transportList(a) {
+    var t = a.transport;
+    return Array.isArray(t) ? t : (t ? [t] : []);
+  }
+
+  // Signature restaurants and Cinderella's Royal Table take two table-service credits.
+  function planCredits(d) {
+    if (d.plan === false) return 0;
+    return d.credits || (d.kind === "signature" ? 2 : 1);
+  }
+
   function audience(a) {
     var who = a.who || [];
     var hasKids = who.some(function (w) { return w === "young-kids" || w === "kids" || w === "teens"; });
@@ -161,9 +182,12 @@
       if (r.access && r.access[p]) why.push(r.access[p]);
     });
 
-    if (TRANSPORT[a.transport] && r.transport.indexOf(a.transport) >= 0) {
-      s += 15;
-      if (!why.some(function (w) { return w.toLowerCase().indexOf(a.transport) >= 0; })) why.push(TRANSPORT[a.transport] + " access");
+    var rides = transportList(a).filter(function (t) { return TRANSPORT[t] && r.transport.indexOf(t) >= 0; });
+    if (rides.length) {
+      s += 15 + (rides.length - 1) * 4;
+      rides.forEach(function (t) {
+        if (!why.some(function (w) { return w.toLowerCase().indexOf(t) >= 0; })) why.push(TRANSPORT[t] + " access");
+      });
     }
 
     (a.vibe || []).forEach(function (v) {
@@ -204,6 +228,17 @@
       s += matched ? 14 : -6;
     }
 
+    if (a.diningPlan === "full") {
+      var credits = planCredits(d);
+      if (credits === 0) { s -= 20; why.push("Not on the dining plan"); }
+      else if (d.kind !== "quick" && credits === 1) s += 8;
+      else if (credits === 2) { s -= 4; why.push("Uses 2 table-service credits"); }
+    }
+    if (a.diningPlan === "quick") {
+      if (d.kind === "quick") { s += 20; why.push("Covered by the Quick-Service plan"); }
+      else s -= 8;
+    }
+
     if (d.kind !== "quick") {
       var over = d.price - Number(a.diningBudget || 3);
       s += over > 0 ? -14 * over : 6;
@@ -240,6 +275,7 @@
       return dining.filter(function (x) { return kinds.indexOf(x.item.kind) >= 0 && x.score > -10; }).slice(0, n);
     };
     return {
+      plan: a.diningPlan,
       resorts: resorts,
       dining: [
         { title: "Character meals", items: a.characters === "none" ? [] : pick(["character"], 3) },
@@ -291,7 +327,7 @@
       '<section class="intro">' +
         '<p class="eyebrow">Walt Disney World planning quiz</p>' +
         '<h1>Find your resort, and where to eat.</h1>' +
-        '<p class="lede">Answer 14 quick questions about your group and how you like to travel. ' +
+        '<p class="lede">Answer ' + QUESTIONS.length + ' quick questions about your group and how you like to travel. ' +
         'We\'ll match you with Walt Disney World resorts and restaurants that fit, and you can send the results to your Pixie Travel Co. advisor.</p>' +
         '<ul class="intro-facts">' +
           '<li><strong>' + DATA.resorts.length + '</strong> resorts compared</li>' +
@@ -374,6 +410,15 @@
     refresh();
   }
 
+  var PLAN_NOTES = {
+    full: "You're planning on the Disney Dining Plan, so we favored restaurants that take one table-service credit. Signature restaurants take two.",
+    quick: "You're planning on the Quick-Service Dining Plan, so we favored quick-service spots. Sit-down meals would be paid separately.",
+    unsure: "Not sure about a dining plan? Your advisor can compare the plan with paying as you go, based on the restaurants you like here."
+  };
+  function planNote(plan) {
+    return PLAN_NOTES[plan] ? '<p class="plan-note">' + esc(PLAN_NOTES[plan]) + '</p>' : '';
+  }
+
   function priceTag(n) { return "$$$$".slice(0, n); }
 
   function renderResults() {
@@ -416,6 +461,7 @@
               '</li>';
             }).join('') + '</ul></div>';
         }).join('') +
+        planNote(res.plan) +
         '<p class="fineprint">Menus, prices and character lineups change often. Price levels: $ under $15, $$ $15 to $35, $$$ $35 to $60, $$$$ over $60 per adult.</p>' +
 
         '<section class="send" aria-labelledby="send-title">' +

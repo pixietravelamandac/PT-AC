@@ -19,6 +19,9 @@
  *   kind         character | table | signature | quick
  *   family       true for buffets and family-style platters
  *   price        1 ($ under $15) to 4 ($$$$ over $60) per adult
+ *   credits      Disney Dining Plan table-service credits, if not the default
+ *                (signature restaurants default to 2, everything else to 1)
+ *   plan         set to false if the restaurant doesn't accept the dining plan
  *   chars        who appears, for character meals
  *   themes       princess, classic, pixar, starwars, animals
  *   picky / adv  0 to 2: how well it suits picky or adventurous eaters
@@ -169,7 +172,7 @@ window.PT_DATA = {
   restaurants: [
     // Magic Kingdom
     { id: "crt", name: "Cinderella's Royal Table", where: "Magic Kingdom", park: "mk",
-      kind: "character", price: 4, chars: "Cinderella and other princesses",
+      kind: "character", price: 4, credits: 2, chars: "Cinderella and other princesses",
       themes: ["princess"], picky: 1, adv: 0, kids: 2, adults: 0, celebrate: ["first", "birthday"],
       note: "Dine inside Cinderella Castle. Fixed price, and it books up fast." },
     { id: "bog", name: "Be Our Guest", where: "Magic Kingdom", park: "mk",
@@ -209,7 +212,7 @@ window.PT_DATA = {
       themes: ["princess", "classic"], picky: 2, adv: 0, kids: 2, adults: 0, celebrate: ["first", "birthday"],
       note: "Buffet in a bright Victorian dining room." },
     { id: "vanda", name: "Victoria & Albert's", where: "Grand Floridian", park: "resort", resort: "gf",
-      kind: "signature", price: 4, picky: 0, adv: 2, kids: 0, adults: 2, minAge: 10, celebrate: ["anniversary"],
+      kind: "signature", price: 4, plan: false, picky: 0, adv: 2, kids: 0, adults: 2, minAge: 10, celebrate: ["anniversary"],
       note: "A multi-course tasting menu and Disney's most formal dining. Guests must be 10 or older." },
     { id: "storybook", name: "Story Book Dining at Artist Point", where: "Wilderness Lodge", park: "resort", resort: "wl",
       kind: "character", price: 4, chars: "Snow White, Dopey, Grumpy and the Evil Queen",
